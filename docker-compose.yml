@@ -1,0 +1,41 @@
+services:
+  gateway:
+    build: ./gateway
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./gateway/conf.yaml:/root/clientportal/root/conf.yaml:ro
+    restart: unless-stopped
+    networks:
+      - ibkr-network
+
+  backend:
+    build: ./backend
+    ports:
+      - "3001:3001"
+    environment:
+      - IBKR_GATEWAY_URL=https://gateway:5000
+      - NODE_ENV=development
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
+      - DATA_CACHE_DIR=/app/cache
+    volumes:
+      - ./cache:/app/cache
+    depends_on:
+      - gateway
+    restart: unless-stopped
+    networks:
+      - ibkr-network
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - ibkr-network
+
+networks:
+  ibkr-network:
+    driver: bridge
