@@ -28,6 +28,7 @@ export function EquityCurve({ accountId, period = '1Y' }: EquityCurveProps) {
     if (!performance?.nav?.data?.[0]) return [];
 
     const navData = performance.nav.data[0];
+    if (!Array.isArray(navData.returns) || !Array.isArray(navData.dates)) return [];
     const portfolioReturns = cumulativeReturns(navData.returns);
 
     // Calculate SPY cumulative returns

@@ -29,7 +29,7 @@ const TRANSACTION_TYPES: Record<string, { label: string; variant: 'default' | 's
 export function Transactions() {
   const { data: accounts, isLoading: accountsLoading } = useAccounts();
   const accountId = accounts?.[0]?.accountId;
-  const { data: transactions, isLoading: transactionsLoading } = useTransactions(accountId, 365);
+  const { data: transactions, isLoading: transactionsLoading } = useTransactions(accountId, 3650);
 
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('');

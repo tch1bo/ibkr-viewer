@@ -42,7 +42,7 @@ export function AccountSummary({ accountId }: AccountSummaryProps) {
   const realizedPnl = summary.realizedpnl?.amount ?? 0;
   const dailyPnl = summary.dailypnl?.amount ?? 0;
   const grossPositionValue = summary.grosspositionvalue?.amount ?? 0;
-  const currency = summary.netliquidationvalue?.currency ?? 'USD';
+  const currency = summary.netliquidationvalue?.currency ?? 'CHF';
 
   // Calculate day change percentage
   const previousNav = nav - dailyPnl;

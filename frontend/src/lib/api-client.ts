@@ -67,7 +67,7 @@ export async function getPerformance(accountId: string, period = '1Y'): Promise<
   return fetchApi(`/performance/${accountId}?period=${period}`);
 }
 
-export async function getTransactions(accountId: string, days = 365): Promise<Transaction[]> {
+export async function getTransactions(accountId: string, days = 3650): Promise<Transaction[]> {
   return fetchApi(`/performance/${accountId}/transactions?days=${days}`);
 }
 

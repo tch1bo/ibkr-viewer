@@ -4,10 +4,11 @@
   "description": "Backend API proxy for IBKR Dashboard",
   "main": "dist/index.js",
   "scripts": {
+    "prebuild": "npm run generate-types",
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
-    "generate-types": "openapi-typescript https://api.ibkr.com/gw/api/v3/api-docs -o src/types/ibkr-openapi.ts"
+    "generate-types": "openapi-typescript https://api.ibkr.com/gw/api/v3/api-docs -o src/types/ibkr-openapi.ts && node -e \"const fs=require('fs');const f='src/types/ibkr-openapi.ts';fs.writeFileSync(f,'// @ts-nocheck\\n'+fs.readFileSync(f,'utf8'))\""
   },
   "dependencies": {
     "cors": "^2.8.5",

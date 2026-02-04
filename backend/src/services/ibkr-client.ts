@@ -1,3 +1,5 @@
+import type { components } from '../types/ibkr-openapi.js';
+
 const GATEWAY_URL = process.env.IBKR_GATEWAY_URL || 'https://localhost:5000';
 const API_BASE = `${GATEWAY_URL}/v1/api`;
 
@@ -101,20 +103,47 @@ export async function getAllocation(accountId: string) {
 
 // Performance Analytics
 export async function getPerformance(accountIds: string[], period: string = '1Y') {
-  const params = new URLSearchParams({
-    acctIds: accountIds.join(','),
-    freq: 'M', // Monthly
-    ...(period && { period }),
+  return ibkrFetch<PerformanceData>('/pa/performance', {
+    method: 'POST',
+    body: JSON.stringify({
+      acctIds: accountIds,
+      freq: 'M',
+      ...(period && { period }),
+    }),
   });
-  return ibkrFetch<PerformanceData>(`/pa/performance?${params}`);
 }
 
-export async function getTransactions(accountIds: string[], days: number = 365) {
-  const params = new URLSearchParams({
-    acctIds: accountIds.join(','),
-    days: days.toString(),
+export interface TransactionsResponse {
+  rc?: number;
+  currency?: string;
+  from?: number;
+  to?: number;
+  includesRealTime?: boolean;
+  transactions?: Array<{
+    date?: string;
+    rawDate?: string;
+    cur?: string;
+    fxRate?: number;
+    pr?: number;
+    qty?: number;
+    acctid?: string;
+    amt?: number;
+    conid?: number;
+    type?: string;
+    desc?: string;
+  }>;
+}
+
+export async function getTransactions(accountIds: string[], days: number = 3650, currency: string = 'CHF', conids: number[]) {
+  return ibkrFetch<TransactionsResponse>('/pa/transactions', {
+    method: 'POST',
+    body: JSON.stringify({
+      acctIds: accountIds,
+      ...(conids?.length && { conids }),
+      currency,
+      days,
+    }),
   });
-  return ibkrFetch<Transaction[]>(`/pa/transactions?${params}`);
 }
 
 // Market Data
@@ -147,137 +176,15 @@ export async function getContractInfo(conid: number) {
   return ibkrFetch<ContractInfo>(`/iserver/contract/${conid}/info`);
 }
 
-// Types
-export interface AuthStatus {
-  authenticated: boolean;
-  competing: boolean;
-  connected: boolean;
-  message?: string;
-  MAC?: string;
-  serverInfo?: {
-    serverName: string;
-    serverVersion: string;
-  };
-}
-
-export interface Account {
-  id: string;
-  accountId: string;
-  accountVan: string;
-  accountTitle: string;
-  displayName: string;
-  accountAlias: string | null;
-  accountStatus: number;
-  currency: string;
-  type: string;
-  tradingType: string;
-  ibEntity: string;
-  faclient: boolean;
-  clearingStatus: string;
-  covestor: boolean;
-  parent?: {
-    mmc: string[];
-    accountId: string;
-    isMParent: boolean;
-    isMChild: boolean;
-    isMultiplex: boolean;
-  };
-  desc: string;
-}
-
-export interface AccountSummary {
-  [key: string]: {
-    amount: number;
-    currency: string;
-    isNull: boolean;
-    timestamp: number;
-    value: string | null;
-    severity: number;
-  };
-}
-
-export interface Position {
-  acctId: string;
-  conid: number;
-  contractDesc: string;
-  position: number;
-  mktPrice: number;
-  mktValue: number;
-  currency: string;
-  avgCost: number;
-  avgPrice: number;
-  realizedPnl: number;
-  unrealizedPnl: number;
-  exchs: string | null;
-  expiry: string | null;
-  putOrCall: string | null;
-  multiplier: number | null;
-  strike: number | null;
-  exerciseStyle: string | null;
-  conExchMap: string[];
-  assetClass: string;
-  undConid: number;
-  model: string;
-  time: number;
-  chineseName: string | null;
-  allExchanges: string;
-  listingExchange: string;
-  countryCode: string;
-  name: string;
-  lastTradingDay: string | null;
-  group: string | null;
-  sector: string | null;
-  sectorGroup: string | null;
-  ticker: string;
-  type: string;
-  undComp: string | null;
-  undSym: string | null;
-  fullName: string;
-  pageSize: number;
-  isEventContract: boolean;
-}
-
-export interface Ledger {
-  [currency: string]: {
-    commoditymarketvalue: number;
-    futuremarketvalue: number;
-    settledcash: number;
-    exchangerate: number;
-    sessionid: number;
-    cashbalance: number;
-    corporatebondsmarketvalue: number;
-    warrantsmarketvalue: number;
-    netliquidationvalue: number;
-    interest: number;
-    unrealizedpnl: number;
-    stockmarketvalue: number;
-    moneyfunds: number;
-    currency: string;
-    realizedpnl: number;
-    funds: number;
-    acctcode: string;
-    issueroptionsmarketvalue: number;
-    key: string;
-    timestamp: number;
-    severity: number;
-  };
-}
-
-export interface Allocation {
-  assetClass: {
-    long: { [key: string]: number };
-    short: { [key: string]: number };
-  };
-  sector: {
-    long: { [key: string]: number };
-    short: { [key: string]: number };
-  };
-  group: {
-    long: { [key: string]: number };
-    short: { [key: string]: number };
-  };
-}
-
+// Types from IBKR OpenAPI spec
+export type AuthStatus = components['schemas']['brokerageSessionStatus'];
+export type Account = components['schemas']['accountAttributes'];
+export type Position = components['schemas']['individualPosition'];
+export type Ledger = components['schemas']['ledger'];
+export type Allocation = components['schemas']['portfolioAllocations'];
+// Not in IBKR OpenAPI spec — performanceResponse schema doesn't match
+// the actual /pa/performance response structure (dates/returns/navs arrays
+// are on each data item, not on the parent object).
 export interface PerformanceData {
   currencyType: string;
   rc: number;
@@ -312,7 +219,25 @@ export interface PerformanceData {
     }>;
   };
 }
+export type HistoricalData = components['schemas']['iserverHistoryLastResponse'];
+export type ContractSearchResult = components['schemas']['secdefSearchResponse'][number];
+export type ContractInfo = components['schemas']['contractInfo'];
 
+// Not in IBKR OpenAPI spec — the /portfolio/{accountId}/summary endpoint
+// returns a dynamic key-value map, not the fixed accountSummaryResponse schema.
+export interface AccountSummary {
+  [key: string]: {
+    amount: number;
+    currency: string;
+    isNull: boolean;
+    timestamp: number;
+    value: string | null;
+    severity: number;
+  };
+}
+
+// Not in IBKR OpenAPI spec — transactionsResponse is a wrapper with
+// nested rpnl/transactions arrays; individual transaction shape is inline.
 export interface Transaction {
   acctId: string;
   conid: number;
@@ -327,6 +252,8 @@ export interface Transaction {
   commission: number;
 }
 
+// Not in IBKR OpenAPI spec — iserverSnapshot is typed as unknown[].
+// We define the actual shape based on observed API responses.
 export interface MarketDataSnapshot {
   conid: number;
   minTick?: number;
@@ -339,71 +266,4 @@ export interface MarketDataSnapshot {
   '87'?: string; // Volume
   '88'?: string; // Exchange
   [key: string]: string | number | boolean | undefined;
-}
-
-export interface HistoricalData {
-  symbol: string;
-  text: string;
-  priceFactor: number;
-  startTime: string;
-  high: string;
-  low: string;
-  timePeriod: string;
-  barLength: number;
-  mdAvailability: string;
-  mktDataDelay: number;
-  outsideRth: boolean;
-  volumeFactor: number;
-  priceFormat: string;
-  chartAnnotations: string;
-  data: Array<{
-    o: number;
-    c: number;
-    h: number;
-    l: number;
-    v: number;
-    t: number;
-  }>;
-  points: number;
-  travelTime: number;
-}
-
-export interface ContractSearchResult {
-  conid: number;
-  companyHeader: string;
-  companyName: string;
-  symbol: string;
-  description: string;
-  restricted: string | null;
-  fop: string | null;
-  opt: string | null;
-  war: string | null;
-  sections: Array<{
-    secType: string;
-    months: string;
-    symbol: string;
-    exchange: string;
-    legSecType: string | null;
-  }>;
-}
-
-export interface ContractInfo {
-  cfi_code: string;
-  symbol: string;
-  cusip: string | null;
-  expiry_full: string | null;
-  con_id: number;
-  maturity_date: string | null;
-  industry: string;
-  instrument_type: string;
-  trading_class: string;
-  valid_exchanges: string;
-  allow_sell_long: boolean;
-  is_zero_commission_security: boolean;
-  local_symbol: string;
-  currency: string;
-  company_name: string;
-  smart_available: boolean;
-  exchange: string;
-  category: string;
 }

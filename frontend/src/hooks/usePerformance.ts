@@ -10,7 +10,7 @@ export function usePerformance(accountId: string | undefined, period = '1Y') {
   });
 }
 
-export function useTransactions(accountId: string | undefined, days = 365) {
+export function useTransactions(accountId: string | undefined, days = 3650) {
   return useQuery({
     queryKey: ['transactions', accountId, days],
     queryFn: () => api.getTransactions(accountId!, days),

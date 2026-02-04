@@ -42,7 +42,7 @@ performanceRouter.get('/:accountId', async (req: Request, res: Response) => {
 performanceRouter.get('/:accountId/transactions', async (req: Request, res: Response) => {
   try {
     const { accountId } = req.params;
-    const { days = '365' } = req.query;
+    const { days = '3650' } = req.query;
 
     const cacheKey = `transactions_${accountId}_${days}`;
     const cached = await cacheManager.get<ibkr.Transaction[]>(cacheKey);
@@ -50,17 +50,43 @@ performanceRouter.get('/:accountId/transactions', async (req: Request, res: Resp
       return res.json(cached);
     }
 
-    const response = await ibkr.getTransactions([accountId], parseInt(days as string, 10));
+    // IBKR requires a non-empty conids array — fetch from current positions
+    const positions = await ibkr.getAllPositions(accountId);
+    if (positions.error || !positions.data) {
+      return res.status(positions.status).json({ error: positions.error || 'Failed to fetch positions for conids' });
+    }
+
+    const conids = [...new Set(positions.data.map(p => p.conid).filter((c): c is number => c !== undefined))];
+    if (conids.length === 0) {
+      return res.json([]);
+    }
+
+    const response = await ibkr.getTransactions([accountId], parseInt(days as string, 10), 'CHF', conids);
     if (response.error) {
       return res.status(response.status).json({ error: response.error });
     }
 
-    await cacheManager.set(cacheKey, response.data, CACHE_TTL.TRANSACTIONS);
+    // Map IBKR response fields to our Transaction interface
+    const transactions: ibkr.Transaction[] = (response.data?.transactions ?? []).map(t => ({
+      acctId: t.acctid ?? accountId,
+      conid: t.conid ?? 0,
+      currency: t.cur ?? 'CHF',
+      fxRate: t.fxRate ?? 1,
+      desc: t.desc ?? '',
+      date: formatRawDate(t.rawDate) || t.date || '',
+      type: normalizeTransactionType(t.type),
+      qty: t.qty ?? 0,
+      amount: t.amt ?? 0,
+      price: t.pr ?? 0,
+      commission: 0,
+    }));
+
+    await cacheManager.set(cacheKey, transactions, CACHE_TTL.TRANSACTIONS);
 
     // Also save to persistent historical cache
-    await saveHistoricalTransactions(accountId, response.data);
+    await saveHistoricalTransactions(accountId, transactions);
 
-    res.json(response.data);
+    res.json(transactions);
   } catch (error) {
     console.error('Error fetching transactions:', error);
     res.status(500).json({ error: 'Failed to fetch transactions' });
@@ -97,6 +123,29 @@ performanceRouter.get('/:accountId/value-vs-invested', async (req: Request, res:
     res.status(500).json({ error: 'Failed to calculate value vs invested' });
   }
 });
+
+// Map IBKR transaction type strings to our short codes
+function normalizeTransactionType(type?: string): string {
+  if (!type) return '';
+  const map: Record<string, string> = {
+    'Buy': 'BUY',
+    'Sell': 'SELL',
+    'Dividend Payment': 'DIV',
+    'Interest': 'INT',
+    'Deposit': 'DEP',
+    'Withdrawal': 'WD',
+    'Fee': 'FEE',
+    'Commission': 'COMM',
+    'Transfer': 'DEP',
+  };
+  return map[type] ?? type.toUpperCase();
+}
+
+// Convert rawDate "20200602" to "2020-06-02"
+function formatRawDate(raw?: string): string {
+  if (!raw || raw.length !== 8) return '';
+  return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
+}
 
 // Helper functions for persistent historical data
 

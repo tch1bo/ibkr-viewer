@@ -48,22 +48,24 @@ export function AllocationChart({ accountId }: AllocationChartProps) {
     return null;
   }
 
-  // Asset class data
-  const assetClassData = Object.entries(allocation.assetClass.long)
-    .filter(([_, value]) => value > 0)
+  // Asset class data — IBKR returns absolute dollar values, convert to percentages
+  const assetClassEntries = Object.entries(allocation.assetClass.long).filter(([_, value]) => value > 0);
+  const assetClassTotal = assetClassEntries.reduce((sum, [_, value]) => sum + value, 0);
+  const assetClassData = assetClassEntries
     .map(([name, value]) => ({
       name: getAssetClassName(name),
-      value: value * 100,
+      value: assetClassTotal > 0 ? (value / assetClassTotal) * 100 : 0,
       color: ASSET_COLORS[name] || '#94a3b8',
     }))
     .sort((a, b) => b.value - a.value);
 
-  // Sector data
-  const sectorData = Object.entries(allocation.sector.long)
-    .filter(([_, value]) => value > 0)
+  // Sector data — same conversion from dollar values to percentages
+  const sectorEntries = Object.entries(allocation.sector.long).filter(([_, value]) => value > 0);
+  const sectorTotal = sectorEntries.reduce((sum, [_, value]) => sum + value, 0);
+  const sectorData = sectorEntries
     .map(([name, value], index) => ({
       name: name || 'Other',
-      value: value * 100,
+      value: sectorTotal > 0 ? (value / sectorTotal) * 100 : 0,
       color: SECTOR_COLORS[index % SECTOR_COLORS.length],
     }))
     .sort((a, b) => b.value - a.value)
